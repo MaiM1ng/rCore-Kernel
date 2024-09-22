@@ -8,12 +8,18 @@ mod lang_items;
 mod logging;
 mod sbi;
 
+pub mod batch;
+mod sync;
+pub mod syscall;
+pub mod trap;
+
 #[allow(unused)]
 use core::{arch::global_asm, panic};
 #[allow(unused)]
 use log::{debug, error, info, trace, warn};
 
 global_asm!(include_str!("entry.asm"));
+global_asm!(include_str!("link_app.S"));
 
 #[no_mangle]
 pub fn rust_main() -> ! {
@@ -25,9 +31,15 @@ pub fn rust_main() -> ! {
 
     info!("[Kernel] Hello, World!");
 
+    trap::init();
+
+    batch::init();
+
+    batch::run_next_app();
+
     // panic!("Shutdown Machine!");
-    info!("[Kernel] Kernel Shutdown!");
-    sbi::shutdown(false);
+    // info!("[Kernel] Kernel Shutdown!");
+    // sbi::shutdown(false);
 }
 
 fn clear_bss() {
