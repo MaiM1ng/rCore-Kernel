@@ -79,6 +79,7 @@ __restore:
 
   csrw sstatus, t0
   csrw sepc, t1
+  // 此时 sscratch 的值指向user stack
   csrw sscratch, t2
 
   ld x1, 1 * 8(sp)

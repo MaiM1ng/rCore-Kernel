@@ -169,3 +169,11 @@ pub fn run_next_app() -> ! {
 
     panic!("Unreachable in batch::run_current_app!");
 }
+
+pub fn get_user_stack_sp_space() -> (usize, usize) {
+    (USER_STACK.get_sp(), USER_STACK.get_sp() + USER_STACK_SIZE)
+}
+
+pub fn get_app_address_space() -> (usize, usize) {
+    (APP_BASE_ADDRESS, APP_BASE_ADDRESS + APP_SIZE_LIMIT)
+}

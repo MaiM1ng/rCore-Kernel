@@ -11,7 +11,7 @@ fn main() {
 
 fn insert_app_data() -> Result<()> {
     let mut f = File::create("src/link_app.S").unwrap();
-    let mut apps: Vec<_> = read_dir("../rCore-Tutorial-v3/user/src/bin/")
+    let mut apps: Vec<_> = read_dir("../rCore-Tutorial-v3/user/build/bin/")
         .unwrap()
         .into_iter()
         .map(|dir_entry| {
