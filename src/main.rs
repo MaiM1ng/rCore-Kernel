@@ -8,7 +8,9 @@ mod lang_items;
 mod logging;
 mod sbi;
 
-pub mod batch;
+// pub mod batch;
+pub mod config;
+pub mod loader;
 mod sync;
 pub mod syscall;
 pub mod trap;
@@ -33,13 +35,14 @@ pub fn rust_main() -> ! {
 
     trap::init();
 
-    batch::init();
+    loader::load_apps();
 
-    batch::run_next_app();
+    loader::run_next_app();
 
     // panic!("Shutdown Machine!");
     // info!("[Kernel] Kernel Shutdown!");
     // sbi::shutdown(false);
+    // panic!("unreachable in rust main");
 }
 
 fn clear_bss() {

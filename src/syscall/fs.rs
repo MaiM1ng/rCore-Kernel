@@ -1,14 +1,13 @@
-use core::isize;
-
-use crate::batch::{get_app_address_space, get_user_stack_sp_space};
+use crate::loader::{get_app_address_space, get_current_app_id, get_user_stack_sp_space};
 
 const FD_STDOUT: usize = 1;
 
 pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
     match fd {
         FD_STDOUT => {
-            let (sp_base, sp_top) = get_user_stack_sp_space();
-            let app_as = get_app_address_space();
+            let current_app_id = get_current_app_id();
+            let (sp_base, sp_top) = get_user_stack_sp_space(current_app_id);
+            let app_as = get_app_address_space(current_app_id);
             let sp_range = sp_base..sp_top;
             let app_as_range = app_as.0..app_as.1;
 

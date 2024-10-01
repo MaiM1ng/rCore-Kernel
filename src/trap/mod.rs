@@ -8,7 +8,7 @@ use riscv::register::{
     stvec::{self},
 };
 
-use crate::batch::run_next_app;
+use crate::loader::run_next_app;
 use crate::syscall::syscall;
 
 global_asm!(include_str!("trap.S"));
