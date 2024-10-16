@@ -8,12 +8,17 @@ mod lang_items;
 mod logging;
 mod sbi;
 
+// 在这目录下声明了一个board的模块
+#[path = "boards/qemu.rs"]
+mod board;
+
 // pub mod batch;
 pub mod config;
 pub mod loader;
 mod sync;
 pub mod syscall;
 pub mod task;
+mod timer;
 pub mod trap;
 
 #[allow(unused)]
@@ -37,6 +42,10 @@ pub fn rust_main() -> ! {
     trap::init();
 
     loader::load_apps();
+
+    trap::enable_timer_interrupt();
+
+    timer::set_next_trigger();
 
     task::run_first_task();
 

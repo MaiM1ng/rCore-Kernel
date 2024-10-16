@@ -10,3 +10,4 @@
 
 1. ch2: Batch System
 2. ch2: sys_write 安全检查
+3. ch3: 多道程序与协作调度: `f1e3f4a25d040477025ba745b1ebdc5c982364fa`

@@ -141,7 +141,6 @@ pub fn run_first_task() {
 }
 
 // 这里需要知道当前是哪个app发起的syscall
-// 由于执行run_next_app函数后，current_app++了， 这里需要-1
 pub fn get_current_task_id() -> usize {
     TASK_MANAGER.get_current_task()
 }
