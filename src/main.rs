@@ -13,6 +13,7 @@ pub mod config;
 pub mod loader;
 mod sync;
 pub mod syscall;
+pub mod task;
 pub mod trap;
 
 #[allow(unused)]
@@ -37,11 +38,11 @@ pub fn rust_main() -> ! {
 
     loader::load_apps();
 
-    loader::run_next_app();
+    task::run_first_task();
 
     // panic!("Shutdown Machine!");
-    // info!("[Kernel] Kernel Shutdown!");
-    // sbi::shutdown(false);
+    info!("[Kernel] Kernel Shutdown!");
+    sbi::shutdown(false);
     // panic!("unreachable in rust main");
 }
 

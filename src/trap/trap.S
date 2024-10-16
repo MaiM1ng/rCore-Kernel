@@ -67,7 +67,7 @@ __alltraps:
 // 恢复完以后 sscratch 指向了user stack, 然后__restore会交换sp = user stack， sscratch = Kernel stack。
 
 __restore:
-  mv sp, a0
+  # mv sp, a0
   # now sp -> kernel stack
   # sscratch -> user stack
   # 如果是第一次指向，那么此时sscratch的值未定义

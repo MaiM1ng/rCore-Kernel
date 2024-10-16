@@ -2,10 +2,6 @@ use crate::config::*;
 use crate::trap::TrapContext;
 use core::arch::asm;
 
-use crate::sbi::shutdown;
-use crate::sync::UPSafeCell;
-use lazy_static::*;
-
 // 当作为数组中的元素是，需要实现copy和clone trait， UserStack同理
 #[repr(align(4096))]
 #[derive(Clone, Copy)]
@@ -43,6 +39,7 @@ impl KernelStack {
     }
 
     // 相应的 返回值从Batch System发生了变化
+    // 返回分配的上下文的地址
     pub fn push_context(&self, cx: TrapContext) -> usize {
         // 在栈上分配一块空间
         let cx_ptr = (self.get_sp() - core::mem::size_of::<TrapContext>()) as *mut TrapContext;
@@ -52,40 +49,6 @@ impl KernelStack {
         }
         cx_ptr as usize
     }
-}
-
-// batch System
-struct AppManger {
-    num_app: usize,
-    current_app: usize,
-}
-
-impl AppManger {
-    pub fn get_current_app(&self) -> usize {
-        self.current_app
-    }
-
-    pub fn move_to_next_app(&mut self) {
-        self.current_app += 1;
-    }
-}
-
-lazy_static! {
-    static ref APP_MANAGER: UPSafeCell<AppManger> = unsafe {
-        UPSafeCell::new({
-            extern "C" {
-                fn _num_app();
-            }
-
-            let num_app_ptr = _num_app as usize as *const usize;
-            let num_app = num_app_ptr.read_volatile();
-
-            AppManger {
-                num_app: num_app,
-                current_app: 0,
-            }
-        })
-    };
 }
 
 // 计算app i在内存中相应的位置
@@ -165,40 +128,6 @@ pub fn init_app_cx(app_id: usize) -> usize {
         get_base_i(app_id),
         USER_STACK[app_id].get_sp(),
     ))
-}
-
-pub fn run_next_app() -> ! {
-    let mut app_manger = APP_MANAGER.exclusive_access();
-    let current_app = app_manger.get_current_app();
-
-    app_manger.move_to_next_app();
-
-    if current_app >= app_manger.num_app {
-        println!("[Kernel] All application completed!");
-        shutdown(false);
-    }
-
-    drop(app_manger);
-
-    extern "C" {
-        fn __restore(cx_addr: usize);
-    }
-
-    unsafe {
-        let ctx = init_app_cx(current_app);
-        __restore(ctx);
-    }
-
-    panic!("unreachable run_next_app")
-}
-
-// 这里需要知道当前是哪个app发起的syscall
-// 由于执行run_next_app函数后，current_app++了， 这里需要-1
-pub fn get_current_app_id() -> usize {
-    let app_manager = APP_MANAGER.exclusive_access();
-    let app_id = app_manager.get_current_app();
-    drop(app_manager);
-    app_id - 1
 }
 
 pub fn get_user_stack_sp_space(app_id: usize) -> (usize, usize) {

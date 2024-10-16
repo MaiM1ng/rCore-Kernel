@@ -1,7 +1,7 @@
 use std::fs::{read_dir, File};
 use std::io::{Result, Write};
 
-static TARGET_PATH: &str = "../user/target/riscv64gc-unknown-none-elf/release/";
+static TARGET_PATH: &str = "../rCore-Tutorial-v3//user/target/riscv64gc-unknown-none-elf/release/";
 
 fn main() {
     println!("cargo:rerun-if-changed=../user/src/");
@@ -11,7 +11,7 @@ fn main() {
 
 fn insert_app_data() -> Result<()> {
     let mut f = File::create("src/link_app.S").unwrap();
-    let mut apps: Vec<_> = read_dir("../user/src/bin/")
+    let mut apps: Vec<_> = read_dir("../rCore-Tutorial-v3//user/src/bin/")
         .unwrap()
         .into_iter()
         .map(|dir_entry| {

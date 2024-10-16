@@ -15,6 +15,9 @@ impl TrapContext {
     }
 
     pub fn app_init_context(entry: usize, sp: usize) -> Self {
+        // spp表示进入到s模式之前的特权等级
+        // spp: 0 U模式
+        // spp: 1 S模式
         let mut sstatus = sstatus::read();
         sstatus.set_spp(SPP::User);
         let mut cx = Self {

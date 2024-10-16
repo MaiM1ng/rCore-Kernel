@@ -1,11 +1,12 @@
-use crate::loader::{get_app_address_space, get_current_app_id, get_user_stack_sp_space};
+use crate::loader::{get_app_address_space, get_user_stack_sp_space};
+use crate::task::get_current_task_id;
 
 const FD_STDOUT: usize = 1;
 
 pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
     match fd {
         FD_STDOUT => {
-            let current_app_id = get_current_app_id();
+            let current_app_id = get_current_task_id();
             let (sp_base, sp_top) = get_user_stack_sp_space(current_app_id);
             let app_as = get_app_address_space(current_app_id);
             let sp_range = sp_base..sp_top;
