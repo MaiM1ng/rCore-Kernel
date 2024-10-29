@@ -51,7 +51,7 @@ pub fn rust_main() -> ! {
 
     // panic!("Shutdown Machine!");
     info!("[Kernel] Kernel Shutdown!");
-    sbi::shutdown(false);
+    sbi::shutdown();
     // panic!("unreachable in rust main");
 }
 

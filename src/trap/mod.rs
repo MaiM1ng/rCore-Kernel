@@ -8,7 +8,11 @@ use riscv::register::{
     stvec::{self},
 };
 
-use crate::{syscall::syscall, task::suspend_current_and_run_next, timer::set_next_trigger};
+use crate::{
+    syscall::syscall,
+    task::{exit_current_and_run_next, suspend_current_and_run_next},
+    timer::set_next_trigger,
+};
 
 global_asm!(include_str!("trap.S"));
 
@@ -40,11 +44,11 @@ pub fn trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
         }
         Trap::Exception(Exception::StoreFault) | Trap::Exception(Exception::StorePageFault) => {
             println!("[Kernel] PageFault in application, kernel killed it.");
-            panic!("[Kernel] Cannot continue!");
+            exit_current_and_run_next();
         }
         Trap::Exception(Exception::IllegalInstruction) => {
             println!("[Kernel] IllegalInstruction in application, kernel killed it.");
-            panic!("[Kernel] Cannot continue!");
+            exit_current_and_run_next();
         }
         Trap::Interrupt(scause::Interrupt::SupervisorTimer) => {
             set_next_trigger();

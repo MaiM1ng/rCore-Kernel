@@ -81,7 +81,7 @@ impl TaskManager {
             drop(inner);
             unsafe { __switch(current_task_cx_ptr, next_task_cx_ptr) };
         } else {
-            panic!("All applications completed!");
+            panic!("[Kernel] All applications completed!");
         }
     }
 

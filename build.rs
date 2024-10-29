@@ -1,17 +1,17 @@
 use std::fs::{read_dir, File};
 use std::io::{Result, Write};
 
-static TARGET_PATH: &str = "../rCore-Tutorial-v3//user/target/riscv64gc-unknown-none-elf/release/";
+static TARGET_PATH: &str = "../rCore-Tutorial-Code-2024S/user/build/bin/";
 
 fn main() {
-    println!("cargo:rerun-if-changed=../user/src/");
+    println!("cargo:rerun-if-changed=../rCore-Tutorial-Code-2024S/user/src/");
     println!("cargo:rerun-if-changed={}", TARGET_PATH);
     insert_app_data().unwrap();
 }
 
 fn insert_app_data() -> Result<()> {
     let mut f = File::create("src/link_app.S").unwrap();
-    let mut apps: Vec<_> = read_dir("../rCore-Tutorial-v3//user/src/bin/")
+    let mut apps: Vec<_> = read_dir("../rCore-Tutorial-Code-2024S/user/build/bin/")
         .unwrap()
         .into_iter()
         .map(|dir_entry| {
