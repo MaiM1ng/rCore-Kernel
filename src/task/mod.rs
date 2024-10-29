@@ -4,11 +4,12 @@ mod task;
 
 use crate::loader::get_num_app;
 use crate::sync::UPSafeCell;
+use crate::timer::get_time_ms;
 use crate::{config::*, loader::init_app_cx};
 use context::TaskContext;
 use lazy_static::lazy_static;
 use switch::__switch;
-use task::{TaskControlBlock, TaskStatus};
+pub use task::{TaskControlBlock, TaskStatus};
 
 pub struct TaskManager {
     num_app: usize,
@@ -26,6 +27,9 @@ lazy_static! {
         let mut tasks = [TaskControlBlock {
             task_cx: TaskContext::zero_init(),
             task_status: TaskStatus::UnInit,
+            syscall_times: [0; MAX_SYSCALL_NUM],
+            first_run_time: 0,
+            first_run_flag: true,
         }; MAX_APP_NUM];
 
         for i in 0..num_app {
@@ -76,6 +80,12 @@ impl TaskManager {
             let current_task_cx_ptr = &mut inner.tasks[current].task_cx as *mut TaskContext;
             let next_task_cx_ptr = &mut inner.tasks[next].task_cx as *const TaskContext;
 
+            // 更新第一次运行时间
+            if inner.tasks[next].first_run_flag {
+                inner.tasks[next].first_run_flag = false;
+                inner.tasks[next].first_run_time = get_time_ms();
+            }
+
             // 此处必须手动drop inner
             // 所有权此时保留在当前的上下文上，切换出了将无法自动释放，因此需要手动释放。
             drop(inner);
@@ -98,6 +108,8 @@ impl TaskManager {
         let mut inner = self.inner.exclusive_access();
         let task0 = &mut inner.tasks[0];
         task0.task_status = TaskStatus::Running;
+        task0.first_run_flag = false;
+        task0.first_run_time = get_time_ms();
         let next_task_cx_ptr = &task0.task_cx as *const TaskContext;
 
         drop(inner);
@@ -111,6 +123,22 @@ impl TaskManager {
     fn get_current_task(&self) -> usize {
         let inner = self.inner.exclusive_access();
         inner.current_task
+    }
+
+    fn update_current_task_syscall_times(&self, syscall_id: usize) {
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].syscall_times[syscall_id] += 1;
+    }
+
+    fn current_task_first_running_time(&self) -> usize {
+        let inner = self.inner.exclusive_access();
+        inner.tasks[inner.current_task].first_run_time
+    }
+
+    fn current_task_syscall_times(&self) -> [u32; MAX_SYSCALL_NUM] {
+        let inner = self.inner.exclusive_access();
+        inner.tasks[inner.current_task].syscall_times
     }
 }
 
@@ -143,4 +171,19 @@ pub fn run_first_task() {
 // 这里需要知道当前是哪个app发起的syscall
 pub fn get_current_task_id() -> usize {
     TASK_MANAGER.get_current_task()
+}
+
+/// 更新指定系统调用id计数器
+pub fn do_update_current_task_syscall_times(syscall_id: usize) {
+    TASK_MANAGER.update_current_task_syscall_times(syscall_id);
+}
+
+/// 获取当前任务第一次执行时间
+pub fn get_current_task_first_running_time() -> usize {
+    TASK_MANAGER.current_task_first_running_time()
+}
+
+/// 获取当前任务系统调用计数器
+pub fn get_current_task_syscall_times() -> [u32; MAX_SYSCALL_NUM] {
+    TASK_MANAGER.current_task_syscall_times()
 }

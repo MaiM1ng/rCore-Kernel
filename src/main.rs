@@ -8,10 +8,6 @@ mod lang_items;
 mod logging;
 mod sbi;
 
-// 在这目录下声明了一个board的模块
-#[path = "boards/qemu.rs"]
-mod board;
-
 // pub mod batch;
 pub mod config;
 pub mod loader;
@@ -50,9 +46,9 @@ pub fn rust_main() -> ! {
     task::run_first_task();
 
     // panic!("Shutdown Machine!");
-    info!("[Kernel] Kernel Shutdown!");
-    sbi::shutdown();
-    // panic!("unreachable in rust main");
+    // info!("[Kernel] Kernel Shutdown!");
+    // sbi::shutdown();
+    panic!("unreachable in rust main");
 }
 
 fn clear_bss() {

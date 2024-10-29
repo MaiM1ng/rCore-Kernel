@@ -1,4 +1,4 @@
-use super::context::TaskContext;
+use super::{context::TaskContext, MAX_SYSCALL_NUM};
 
 #[derive(Copy, Clone, PartialEq)]
 // Trait: Clone clone调用拷贝
@@ -15,4 +15,7 @@ pub enum TaskStatus {
 pub struct TaskControlBlock {
     pub task_status: TaskStatus,
     pub task_cx: TaskContext,
+    pub syscall_times: [u32; MAX_SYSCALL_NUM],
+    pub first_run_time: usize,
+    pub first_run_flag: bool,
 }

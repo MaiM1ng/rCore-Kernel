@@ -1,4 +1,4 @@
-RCORE_TUTORIAL_DIR := ../rCore-Tutorial-v3
+RCORE_TUTORIAL_DIR := ../rCore-Tutorial-Code-2024S
 
 TARGET := riscv64gc-unknown-none-elf
 BUILD_DIR := target/$(TARGET)/release
@@ -28,11 +28,19 @@ GDB_FLAGS := -ex 'file $(BUILD_DIR)/$(OS_EXEC)' \
 # LOG
 LOG ?= info
 
+BASE ?= 1
+TEST ?= 0
+CHAPTER ?= 0
+
 CARGO_FLAGS := LOG=$(LOG)
 
 all: build
 
-build:
+kernel:
+	@make -C ../rCore-Tutorial-Code-2024S/user build TEST=$(TEST) CHAPTER=$(CHAPTER) BASE=$(BASE)
+
+
+build: kernel
 	@$(CARGO_FLAGS) cargo build --release
 	$(OBJCPY) $(OBJCPY_FLAGS) $(BUILD_DIR)/$(OS_EXEC) $(BUILD_DIR)/$(OS_BIN)
 
