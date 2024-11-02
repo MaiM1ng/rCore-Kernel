@@ -1,21 +1,50 @@
-use super::{context::TaskContext, MAX_SYSCALL_NUM};
+//! Type related to task manager
 
-#[derive(Copy, Clone, PartialEq)]
-// Trait: Clone clone调用拷贝
-// PartialEq: 调用==比较
-// Copy: 采用复制语义，而不是移动
-pub enum TaskStatus {
-    UnInit,
-    Ready,
-    Running,
-    Exited,
+use super::TaskContext;
+use crate::config::MAX_SYSCALL_NUM;
+
+#[derive(Copy, Clone)]
+/// struct of TCB
+pub struct TaskControlBlock {
+    /// TCB: task status
+    pub task_status: TaskStatus,
+    /// TCB: task context
+    pub task_cx: TaskContext,
+    /// TCB: task info inner
+    pub task_info_inner: TaskInfoInner,
 }
 
 #[derive(Copy, Clone)]
-pub struct TaskControlBlock {
-    pub task_status: TaskStatus,
-    pub task_cx: TaskContext,
+/// struct of TCB Inner
+pub struct TaskInfoInner {
+    /// TII: syscall_times
     pub syscall_times: [u32; MAX_SYSCALL_NUM],
+    /// TII: first run time
     pub first_run_time: usize,
+    /// TII: first run flag
     pub first_run_flag: bool,
+}
+
+impl TaskInfoInner {
+    /// function: zero_init
+    pub fn zero_init() -> Self {
+        Self {
+            syscall_times: [0; MAX_SYSCALL_NUM],
+            first_run_time: 0,
+            first_run_flag: true,
+        }
+    }
+}
+
+#[derive(Copy, Clone, PartialEq)]
+/// enum: TaskStatus
+pub enum TaskStatus {
+    /// Uninit
+    UnInit,
+    /// Ready to run
+    Ready,
+    /// Running
+    Running,
+    /// Exited
+    Exited,
 }

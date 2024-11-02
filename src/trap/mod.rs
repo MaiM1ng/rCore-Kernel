@@ -1,36 +1,40 @@
+//! Trap handler
+
 mod context;
 
+use crate::syscall::syscall;
 use core::arch::global_asm;
 use riscv::register::{
-    mtvec::TrapMode,
-    scause::{self, Exception, Trap},
-    sie, stval,
-    stvec::{self},
+    scause::{self, Exception, Interrupt, Trap},
+    sie, stval, stvec,
 };
 
 use crate::{
-    syscall::syscall,
-    task::{exit_current_and_run_next, suspend_current_and_run_next},
+    task::{exit_current_and_run_next, suspended_current_and_run_next},
     timer::set_next_trigger,
 };
 
 global_asm!(include_str!("trap.S"));
 
+/// trap init: for set trap_handler
 pub fn init() {
     extern "C" {
         fn __alltraps();
     }
 
-    // set exception handler
-    // 在RV中，发生异常时会跳转到stevc指向的地址执行
-    // 将stvec指向alltraps 用于 u模式程序的上下文保存
-    // 保存后会跳转到trap_handler进行异常服务程序的分发
     unsafe {
-        // 在rCore中只涉及Direct模式
-        stvec::write(__alltraps as usize, TrapMode::Direct);
+        stvec::write(__alltraps as usize, stvec::TrapMode::Direct);
     }
 }
 
+/// enable supervisor time Interrupt
+pub fn enable_timer_interrupt() {
+    unsafe {
+        sie::set_stimer();
+    }
+}
+
+/// trap handler
 #[no_mangle]
 pub fn trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
     let scause = scause::read();
@@ -38,21 +42,20 @@ pub fn trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
 
     match scause.cause() {
         Trap::Exception(Exception::UserEnvCall) => {
-            // 从下一条指令开始执行
             cx.sepc += 4;
             cx.x[10] = syscall(cx.x[17], [cx.x[10], cx.x[11], cx.x[12]]) as usize;
         }
         Trap::Exception(Exception::StoreFault) | Trap::Exception(Exception::StorePageFault) => {
-            println!("[Kernel] PageFault in application, kernel killed it.");
+            println!("[Kernel] PageFault in application, bad addr = {:#x}, bad instruction = {:#x}, kernel killed it.", stval, cx.sepc);
             exit_current_and_run_next();
         }
         Trap::Exception(Exception::IllegalInstruction) => {
-            println!("[Kernel] IllegalInstruction in application, kernel killed it.");
+            println!("[Kernel] IllegalInstruction in application! Kernel killed it.");
             exit_current_and_run_next();
         }
-        Trap::Interrupt(scause::Interrupt::SupervisorTimer) => {
+        Trap::Interrupt(Interrupt::SupervisorTimer) => {
             set_next_trigger();
-            suspend_current_and_run_next();
+            suspended_current_and_run_next();
         }
         _ => {
             panic!(
@@ -62,14 +65,8 @@ pub fn trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
             );
         }
     }
+
     cx
 }
 
 pub use context::TrapContext;
-
-pub fn enable_timer_interrupt() {
-    unsafe {
-        // sie[5] = STIE, Supervisor Timer Interrupt enable
-        sie::set_stimer();
-    }
-}

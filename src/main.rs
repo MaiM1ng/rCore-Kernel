@@ -1,64 +1,58 @@
+//! The main module and entrypoint
+
+#![deny(warnings)]
+#![deny(missing_docs)]
 #![no_std]
 #![no_main]
 #![feature(panic_info_message)]
 
 #[macro_use]
-mod console;
-mod lang_items;
-mod logging;
-mod sbi;
+extern crate log;
 
-// pub mod batch;
+#[macro_use]
+mod console;
 pub mod config;
-pub mod loader;
-mod sync;
+pub mod lang_item;
+mod loader;
+pub mod logging;
+pub mod sbi;
+pub mod sync;
 pub mod syscall;
 pub mod task;
-mod timer;
+pub mod timer;
 pub mod trap;
 
-#[allow(unused)]
-use core::{arch::global_asm, panic};
-#[allow(unused)]
-use log::{debug, error, info, trace, warn};
+core::arch::global_asm!(include_str!("entry.asm"));
+core::arch::global_asm!(include_str!("link_app.S"));
 
-global_asm!(include_str!("entry.asm"));
-global_asm!(include_str!("link_app.S"));
-
-#[no_mangle]
-pub fn rust_main() -> ! {
-    clear_bss();
-
-    logging::init_log();
-
-    show_os_sections();
-
-    info!("[Kernel] Hello, World!");
-
-    trap::init();
-
-    loader::load_apps();
-
-    trap::enable_timer_interrupt();
-
-    timer::set_next_trigger();
-
-    task::run_first_task();
-
-    // panic!("Shutdown Machine!");
-    // info!("[Kernel] Kernel Shutdown!");
-    // sbi::shutdown();
-    panic!("unreachable in rust main");
-}
-
+/// Clear BSS Segment
 fn clear_bss() {
     extern "C" {
         fn sbss();
         fn ebss();
     }
+
     (sbss as usize..ebss as usize).for_each(|a| unsafe { (a as *mut u8).write_volatile(0) });
 }
 
+#[no_mangle]
+/// os entry
+pub fn rust_main() -> ! {
+    clear_bss();
+    logging::init();
+    show_os_sections();
+    println!("[Kernel] Hello, World!");
+
+    trap::init();
+    loader::load_apps();
+    trap::enable_timer_interrupt();
+    timer::set_next_trigger();
+    task::run_first_task();
+
+    panic!("unreachable in rust_main!");
+}
+
+/// show os Segment
 fn show_os_sections() {
     extern "C" {
         fn stext();

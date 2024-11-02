@@ -1,11 +1,17 @@
 RCORE_TUTORIAL_DIR := ../rCore-Tutorial-Code-2024S
 
+BUILD_MODE = release
 TARGET := riscv64gc-unknown-none-elf
-BUILD_DIR := target/$(TARGET)/release
+BUILD_DIR := target/$(TARGET)/$(BUILD_MODE)
 
+# build
 OS_EXEC := os
 OS_BIN := $(OS_EXEC).bin
 OS_ENTRY_ADDR := 0x80200000
+BUILD_FLAGS := 
+ifeq ($(BUILD_MODE), release)
+	BUILD_FLAGS += --release
+endif
 
 # strip metadata
 OBJCPY := rust-objcopy
@@ -41,7 +47,7 @@ kernel:
 
 
 build: kernel
-	@$(CARGO_FLAGS) cargo build --release
+	@$(CARGO_FLAGS) cargo build $(BUILD_FLAGS)
 	$(OBJCPY) $(OBJCPY_FLAGS) $(BUILD_DIR)/$(OS_EXEC) $(BUILD_DIR)/$(OS_BIN)
 
 run: $(BUILD_DIR)/$(OS_BIN)
@@ -61,6 +67,9 @@ $(BUILD_DIR)/$(OS_EXEC): $(shell find src -name '*.rs')
 
 $(BUILD_DIR)/$(OS_BIN): $(shell find src -name '*.rs')
 	@$(MAKE) build
+
+disasm:
+	riscv64-unknown-elf-objdump -d $(BUILD_DIR)/$(OS_EXEC) | nvim
 
 
 .PHONY: build run server telnet clean
