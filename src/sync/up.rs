@@ -4,6 +4,7 @@ use core::cell::{RefCell, RefMut};
 
 /// struct of RefCell
 pub struct UPSafeCell<T> {
+    /// inner data
     inner: RefCell<T>,
 }
 

@@ -5,44 +5,46 @@ mod switch;
 #[allow(clippy::module_inception)]
 mod task;
 
+use alloc::vec::Vec;
 pub use context::TaskContext;
 use lazy_static::*;
 use switch::__switch;
 pub use task::TaskControlBlock;
 pub use task::{TaskInfoInner, TaskStatus};
 
+use crate::loader::get_app_data;
+use crate::loader::get_num_app;
 use crate::sync::UPSafeCell;
 use crate::timer::get_time_ms;
-use crate::{
-    config::MAX_APP_NUM,
-    loader::{get_num_app, init_app_cx},
-};
+use crate::trap::TrapContext;
 
 /// struct of task manager
 pub struct TaskManager {
+    /// total number of tasks
     num_app: usize,
+    /// use inner value to get mutable access
     inner: UPSafeCell<TaskManagerInner>,
 }
 
 /// inner struct of task manager
 pub struct TaskManagerInner {
-    tasks: [TaskControlBlock; MAX_APP_NUM],
+    /// task list
+    tasks: Vec<TaskControlBlock>,
+    /// id of current Running Task
     current_task: usize,
 }
 
 lazy_static! {
     /// global var : TaskManager
     pub static ref TASK_MANAGER: TaskManager = {
+        info!("[Kernel] init TASK_MANAGER");
         let num_app = get_num_app();
-        let mut tasks = [TaskControlBlock {
-            task_cx: TaskContext::zero_init(),
-            task_status: TaskStatus::UnInit,
-            task_info_inner: TaskInfoInner::zero_init(),
-        }; MAX_APP_NUM];
+        info!("[Kernel] num_app = {}", num_app);
 
-        for (i, task) in tasks.iter_mut().enumerate() {
-            task.task_cx = TaskContext::goto_restore(init_app_cx(i));
-            task.task_status = TaskStatus::Ready;
+        let mut tasks = Vec::new();
+
+        for i in 0..num_app {
+            tasks.push(TaskControlBlock::new(get_app_data(i), i));
         }
 
         TaskManager {
@@ -134,6 +136,16 @@ impl TaskManager {
         let current = inner.current_task;
         inner.tasks[current].task_info_inner
     }
+
+    fn get_current_trap_cx(&self) -> &'static mut TrapContext {
+        let inner = self.inner.exclusive_access();
+        inner.tasks[inner.current_task].get_trap_cx()
+    }
+
+    fn get_current_token(&self) -> usize {
+        let inner = self.inner.exclusive_access();
+        inner.tasks[inner.current_task].get_user_token()
+    }
 }
 
 /// warp function: run first task
@@ -175,4 +187,14 @@ pub fn do_update_current_task_syscall_times(syscall_id: usize) {
 /// warp function: get_current_task_task_info_inner
 pub fn get_current_task_task_info_inner() -> TaskInfoInner {
     TASK_MANAGER.current_task_task_info_inner()
+}
+
+/// pub api get current trapcontext
+pub fn current_trap_cx() -> &'static mut TrapContext {
+    TASK_MANAGER.get_current_trap_cx()
+}
+
+/// get the current running task token
+pub fn current_user_token() -> usize {
+    TASK_MANAGER.get_current_token()
 }

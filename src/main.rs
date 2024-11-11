@@ -5,9 +5,14 @@
 #![no_std]
 #![no_main]
 #![feature(panic_info_message)]
+#![feature(alloc_error_handler)]
 
 #[macro_use]
 extern crate log;
+#[macro_use]
+extern crate bitflags;
+
+extern crate alloc;
 
 #[macro_use]
 mod console;
@@ -15,6 +20,7 @@ pub mod config;
 pub mod lang_item;
 mod loader;
 pub mod logging;
+pub mod mm;
 pub mod sbi;
 pub mod sync;
 pub mod syscall;
@@ -43,8 +49,9 @@ pub fn rust_main() -> ! {
     show_os_sections();
     println!("[Kernel] Hello, World!");
 
+    mm::init();
+
     trap::init();
-    loader::load_apps();
     trap::enable_timer_interrupt();
     timer::set_next_trigger();
     task::run_first_task();

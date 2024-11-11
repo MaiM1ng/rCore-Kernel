@@ -1,11 +1,16 @@
 //! Implementation of TCB
 
+use crate::trap::trap_return;
+
 #[derive(Copy, Clone)]
 #[repr(C)]
 /// TaskContext of an application
 pub struct TaskContext {
+    /// 返回地址寄存器
     ra: usize,
+    /// Stack Pointer
     sp: usize,
+    /// s0-11 register, callee saved
     s: [usize; 12],
 }
 
@@ -19,14 +24,10 @@ impl TaskContext {
         }
     }
 
-    /// create a new task context and set restore
-    pub fn goto_restore(kstack_ptr: usize) -> Self {
-        extern "C" {
-            fn __restore();
-        }
-
+    /// 构造返回上下文
+    pub fn goto_trap_return(kstack_ptr: usize) -> Self {
         Self {
-            ra: __restore as usize,
+            ra: trap_return as usize,
             sp: kstack_ptr,
             s: [0; 12],
         }

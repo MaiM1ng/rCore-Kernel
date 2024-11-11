@@ -10,6 +10,12 @@ pub struct TrapContext {
     pub sstatus: Sstatus,
     /// supervisor exception program counter
     pub sepc: usize,
+    /// kernel satp
+    pub kernel_satp: usize,
+    /// kernel sp
+    pub kernel_sp: usize,
+    /// entry of trap handler
+    pub trap_handler: usize,
 }
 
 impl TrapContext {
@@ -19,13 +25,22 @@ impl TrapContext {
     }
 
     /// init the trap context of an application
-    pub fn app_init_context(entry: usize, sp: usize) -> Self {
+    pub fn app_init_context(
+        entry: usize,
+        sp: usize,
+        kernel_satp: usize,
+        kernel_sp: usize,
+        trap_handler: usize,
+    ) -> Self {
         let mut sstatus = sstatus::read();
         sstatus.set_spp(SPP::User);
         let mut cx = Self {
             x: [0; 32],
             sstatus,
             sepc: entry,
+            kernel_satp,
+            kernel_sp,
+            trap_handler,
         };
 
         cx.set_sp(sp);
