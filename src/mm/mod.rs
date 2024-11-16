@@ -8,8 +8,14 @@ mod memory_set;
 mod page_table;
 
 pub use address::{PhysAddr, PhysPageNum, VirtAddr, VirtPageNum};
-pub use memory_set::{kernel_stack_position, MapPermission, MemorySet, KERNEL_SPACE};
-pub use page_table::translated_byte_buffer;
+use heap_allocator::heap_test;
+pub use memory_set::{
+    kernel_stack_position, MapArea, MapPermission, MapType, MemorySet, KERNEL_SPACE,
+};
+pub use page_table::{
+    check_map_area_mapping, check_map_area_unmapping, translated_and_write_bytes,
+    translated_byte_buffer,
+};
 
 /// mm subsystem init
 pub fn init() {
@@ -19,4 +25,7 @@ pub fn init() {
     frame_allocator::init_frame_allocator();
     // Init Kernel address space
     KERNEL_SPACE.exclusive_access().activate();
+
+    // test
+    heap_test();
 }

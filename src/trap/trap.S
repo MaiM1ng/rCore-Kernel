@@ -28,10 +28,12 @@ __alltraps:
     .set n, n + 1
   .endr
   
+  # 现在这里可以使用t寄存器
   csrr t0, sstatus
   csrr t1, sepc
   sd t0, 32*8(sp)
   sd t1, 33*8(sp)
+  # 此时sscratch保存了User Stack
   # 读取用户栈保存到TrapContext上
   csrr t2, sscratch
   sd t2, 2*8(sp)

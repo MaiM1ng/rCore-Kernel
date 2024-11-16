@@ -59,7 +59,7 @@ pub fn rust_main() -> ! {
     panic!("unreachable in rust_main!");
 }
 
-/// show os Segment
+/// show os-elf segment
 fn show_os_sections() {
     extern "C" {
         fn stext();

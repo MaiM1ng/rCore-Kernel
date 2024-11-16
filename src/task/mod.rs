@@ -14,6 +14,7 @@ pub use task::{TaskInfoInner, TaskStatus};
 
 use crate::loader::get_app_data;
 use crate::loader::get_num_app;
+use crate::mm::{MapPermission, VirtAddr};
 use crate::sync::UPSafeCell;
 use crate::timer::get_time_ms;
 use crate::trap::TrapContext;
@@ -37,9 +38,9 @@ pub struct TaskManagerInner {
 lazy_static! {
     /// global var : TaskManager
     pub static ref TASK_MANAGER: TaskManager = {
-        info!("[Kernel] init TASK_MANAGER");
+        println!("[Kernel] init TASK_MANAGER");
         let num_app = get_num_app();
-        info!("[Kernel] num_app = {}", num_app);
+        println!("[Kernel] num_app = {}", num_app);
 
         let mut tasks = Vec::new();
 
@@ -146,6 +147,27 @@ impl TaskManager {
         let inner = self.inner.exclusive_access();
         inner.tasks[inner.current_task].get_user_token()
     }
+
+    fn mapping_address_for_current_task(
+        &self,
+        start_va: VirtAddr,
+        end_va: VirtAddr,
+        map_perm: MapPermission,
+    ) {
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current]
+            .memory_set
+            .insert_framed_area(start_va, end_va, map_perm);
+    }
+
+    fn unmapping_address_for_current_task(&self, start_va: VirtAddr, end_va: VirtAddr) {
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current]
+            .memory_set
+            .munmap_area(start_va, end_va);
+    }
 }
 
 /// warp function: run first task
@@ -197,4 +219,18 @@ pub fn current_trap_cx() -> &'static mut TrapContext {
 /// get the current running task token
 pub fn current_user_token() -> usize {
     TASK_MANAGER.get_current_token()
+}
+
+/// 给当前任务映射一片内存
+pub fn mapping_address_for_current_task(
+    start_va: VirtAddr,
+    end_va: VirtAddr,
+    map_perm: MapPermission,
+) {
+    TASK_MANAGER.mapping_address_for_current_task(start_va, end_va, map_perm);
+}
+
+/// 给当前任务取消映射一块内存
+pub fn unmapping_address_for_current_task(start_va: VirtAddr, end_va: VirtAddr) {
+    TASK_MANAGER.unmapping_address_for_current_task(start_va, end_va);
 }

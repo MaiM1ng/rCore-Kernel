@@ -27,6 +27,8 @@ impl FrameAllocator for StackFrameAllocator {
         }
     }
 
+    // 实际上并没有真实转换物理地址为PPN
+    // 以一个类似于位图的结构控制分配
     fn alloc(&mut self) -> Option<PhysPageNum> {
         if let Some(ppn) = self.recycled.pop() {
             // 先查找recycled中是否有之前回收的物理页
@@ -53,6 +55,7 @@ impl FrameAllocator for StackFrameAllocator {
 }
 
 impl StackFrameAllocator {
+    /// 以PPN的粒度进行分配
     pub fn init(&mut self, l: PhysPageNum, r: PhysPageNum) {
         self.current = l.0;
         self.end = r.0;
@@ -74,7 +77,7 @@ pub fn init_frame_allocator() {
     }
 
     // 可用数据范围
-    // [ceil(ekernel as usize), floor(MEMORY_END))
+    // [ceil(ekernel as usize), floor(MEMORY_END)]
     FRAME_ALLOCATOR.exclusive_access().init(
         PhysAddr::from(ekernel as usize).ceil(),
         PhysAddr::from(MEMORY_END).floor(),

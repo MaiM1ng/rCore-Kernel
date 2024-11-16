@@ -66,6 +66,7 @@ impl TaskControlBlock {
         // 解析ELF
         // 解析出来实际上是虚拟地址
         let (memory_set, user_sp, entry_point) = MemorySet::from_elf(elf_data);
+
         // 从构造的页表中查找trap上下文实际的位置
         // 因为trapContext的VA是约定好的，但是PA不知道在哪
         let trap_cx_ppn = memory_set
@@ -80,6 +81,7 @@ impl TaskControlBlock {
 
         // map kernel stack fo app(app_id) in kernel space
         // 真实的内存也在os的heap上
+        // 每新建一个APP，都需要在Kernel的地址空间上映射这个应用对应的内核栈
         KERNEL_SPACE.exclusive_access().insert_framed_area(
             kernel_stack_bottom.into(),
             kernel_stack_top.into(),
@@ -99,6 +101,7 @@ impl TaskControlBlock {
 
         // TrapContext实际上在task_cx_ppn所在物理页上
         // 且TrapContext是页对齐的
+        // task_cx_ppn已经在建立应用页表的时候分配
         let trap_cx = task_control_block.get_trap_cx();
         *trap_cx = TrapContext::app_init_context(
             entry_point,

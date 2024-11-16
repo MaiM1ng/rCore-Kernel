@@ -78,6 +78,7 @@ impl MemorySet {
         }
     }
 
+    /// Push的时候会完成数据的拷贝
     fn push(&mut self, mut map_area: MapArea, data: Option<&[u8]>) {
         map_area.map(&mut self.page_table);
         if let Some(data) = data {
@@ -100,6 +101,7 @@ impl MemorySet {
     }
 
     /// 创建内核地址空间
+    /// 每个segment都是页对齐的，因此不会重叠
     pub fn new_kernel() -> Self {
         let mut memory_set = Self::new_bare();
 
@@ -111,14 +113,17 @@ impl MemorySet {
             "[Kernel] .text [{:#x}, {:#x})",
             stext as usize, etext as usize
         );
+
         println!(
             "[Kernel] .rodata [{:#x}, {:#x})",
             srodata as usize, erodata as usize
         );
+
         println!(
             "[Kernel] .data [{:#x}, {:#x})",
             sdata as usize, edata as usize
         );
+
         println!(
             "[Kernel] .bss [{:#x}, {:#x})",
             sbss_with_stack as usize, ebss as usize
@@ -234,8 +239,10 @@ impl MemorySet {
 
         let max_end_va: VirtAddr = max_end_vpn.into();
         // 处理栈空间
+        // TODO:为什么用户栈会在这个位置？
         let mut user_stack_bottom: usize = max_end_va.into();
 
+        // 保护页面
         user_stack_bottom += PAGE_SIZE;
         let user_stack_top = user_stack_bottom + USER_STACK_SIZE;
         memort_set.push(
@@ -296,10 +303,26 @@ impl MemorySet {
     pub fn translate(&self, vpn: VirtPageNum) -> Option<PageTableEntry> {
         self.page_table.translate(vpn)
     }
+
+    /// 保证区域一定都在页表当中
+    pub fn munmap_area(&mut self, start_va: VirtAddr, end_va: VirtAddr) {
+        let start_vpn = start_va.floor();
+        let end_vpn = end_va.ceil();
+
+        self.areas.retain_mut(|area| {
+            if end_vpn <= area.get_end() && start_vpn >= area.get_start() {
+                area.unmap(&mut self.page_table);
+                false
+            } else {
+                true
+            }
+        })
+    }
 }
 
 impl MapArea {
     /// 创建一个新的区域
+    /// 但是是连续的
     pub fn new(
         start_va: VirtAddr,
         end_va: VirtAddr,
@@ -310,6 +333,7 @@ impl MapArea {
         let start_vpn: VirtPageNum = start_va.floor();
         // 向上取整
         let end_vpn = end_va.ceil();
+        // 确保start_va和end_va在非对齐的时候 所在页面都可以被映射
         Self {
             vpn_range: VPNRange::new(start_vpn, end_vpn),
             data_frames: BTreeMap::new(),
@@ -319,7 +343,10 @@ impl MapArea {
     }
 
     /// map
+    /// 将self映射到给定的page_table中
     pub fn map(&mut self, page_table: &mut PageTable) {
+        // 对于连续的VA，由于范围是[floor(l), ceil(r)]
+        // 因此进行连续分配，如果是framed形式的map，则会为每一个page分配物理页面
         for vpn in self.vpn_range {
             self.map_one(page_table, vpn);
         }
@@ -337,6 +364,7 @@ impl MapArea {
     pub fn map_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
         let ppn: PhysPageNum;
 
+        // 确定PPN
         match self.map_type {
             MapType::Identical => {
                 // 恒等映射
@@ -352,6 +380,7 @@ impl MapArea {
 
         // 使用给定的权限生成页表权限
         let pte_flags = PTEFlags::from_bits(self.map_perm.bits).unwrap();
+        // 在页表中修改PTE，真正修改映射
         page_table.map(vpn, ppn, pte_flags);
     }
 
@@ -368,7 +397,7 @@ impl MapArea {
         page_table.unmap(vpn);
     }
 
-    // 将data复制到page_table所对应的物理地址中
+    /// 将data复制到page_table所对应的物理地址中
     pub fn copy_data(&mut self, page_table: &PageTable, data: &[u8]) {
         assert_eq!(self.map_type, MapType::Framed);
         let mut start: usize = 0;
@@ -391,6 +420,41 @@ impl MapArea {
             }
             current_vpn.step();
         }
+    }
+
+    /// 虚拟页面的数量
+    pub fn vpn_len(&self) -> usize {
+        self.vpn_range.get_end().0 - self.vpn_range.get_start().0 + 1
+    }
+
+    /// 检查是否被映射过
+    pub fn check_mapping(&self, page_table: &PageTable) -> bool {
+        for vpn in self.vpn_range {
+            if page_table.find_vpn(vpn) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// 检查是否存在没被映射过的区域
+    pub fn check_unmapping(&self, page_table: &PageTable) -> bool {
+        for vpn in self.vpn_range {
+            if !page_table.find_vpn(vpn) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// 获取start
+    pub fn get_start(&self) -> VirtPageNum {
+        self.vpn_range.get_start()
+    }
+
+    /// 获取end
+    pub fn get_end(&self) -> VirtPageNum {
+        self.vpn_range.get_end()
     }
 }
 

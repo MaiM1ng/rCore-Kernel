@@ -24,13 +24,7 @@ global_asm!(include_str!("trap.S"));
 
 /// trap init: for set trap_handler
 pub fn init() {
-    extern "C" {
-        fn __alltraps();
-    }
-
-    unsafe {
-        stvec::write(__alltraps as usize, stvec::TrapMode::Direct);
-    }
+    set_kernel_trap_entry();
 }
 
 /// enable supervisor time Interrupt
@@ -45,6 +39,7 @@ pub fn enable_timer_interrupt() {
 pub fn trap_handler() -> ! {
     set_kernel_trap_entry();
     // 当前应用程序的TrapContext PPN
+    // 由于内核是恒等映射的
     let cx = current_trap_cx();
     // 读取S态寄存器状态
     let scause = scause::read();
@@ -55,7 +50,10 @@ pub fn trap_handler() -> ! {
             cx.sepc += 4;
             cx.x[10] = syscall(cx.x[17], [cx.x[10], cx.x[11], cx.x[12]]) as usize;
         }
-        Trap::Exception(Exception::StoreFault) | Trap::Exception(Exception::StorePageFault) => {
+        Trap::Exception(Exception::StoreFault)
+        | Trap::Exception(Exception::StorePageFault)
+        | Trap::Exception(Exception::LoadFault)
+        | Trap::Exception(Exception::LoadPageFault) => {
             println!("[Kernel] PageFault in application, bad addr = {:#x}, bad instruction = {:#x}, kernel killed it.", stval, cx.sepc);
             exit_current_and_run_next();
         }
