@@ -1,18 +1,18 @@
 //! Syscall: Process management syscalls
 
-use crate::{
-    config::{MAX_SYSCALL_NUM, PAGE_SIZE},
-    mm::{
-        check_map_area_mapping, check_map_area_unmapping, translated_and_write_bytes, MapArea,
-        MapPermission, MapType, VirtAddr,
-    },
-    task::{
-        current_user_token, exit_current_and_run_next, get_current_task_task_info_inner,
-        mapping_address_for_current_task, suspended_current_and_run_next,
-        unmapping_address_for_current_task, TaskStatus,
-    },
-    timer::{get_time_ms, get_time_us},
+use crate::config::{MAX_SYSCALL_NUM, PAGE_SIZE};
+use crate::loader::get_app_data_by_name;
+use crate::mm::{
+    check_map_area_mapping, check_map_area_unmapping, translated_and_write_bytes,
+    translated_refmut, translated_str, MapArea, MapPermission, MapType, VirtAddr,
 };
+use crate::task::{
+    add_task, current_task, current_task_info_inner, current_user_token, exit_current_and_run_next,
+    mapping_address_space_for_current_task, suspend_current_and_run_next,
+    unmapping_address_space_for_current_task, TaskStatus,
+};
+use crate::timer::{get_time_ms, get_time_us};
+use alloc::sync::Arc;
 
 #[repr(C)]
 #[derive(Debug)]
@@ -34,21 +34,28 @@ pub struct TaskInfo {
 
 /// task exit and submit an exit code
 pub fn sys_exit(exit_code: i32) -> ! {
-    trace!("[Kernel] Application exited with code {}", exit_code);
-    exit_current_and_run_next();
+    trace!(
+        "[Kernel] pid[{}] exited with code {}",
+        current_task().unwrap().pid.0,
+        exit_code
+    );
+    exit_current_and_run_next(exit_code);
     panic!("Unreachable in sys_exit!");
 }
 
 /// current task gives up resources for other task
 pub fn sys_yield() -> isize {
-    trace!("[Kernel] sys_yield");
-    suspended_current_and_run_next();
+    trace!("[Kernel] pid[{}] sys_yield", current_task().unwrap().pid.0);
+    suspend_current_and_run_next();
     0
 }
 
 /// get time
 pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
-    trace!("[Kernel] sys_get_time");
+    trace!(
+        "[Kernel] pid[{}] sys_get_time",
+        current_task().unwrap().pid.0
+    );
 
     let us = get_time_us();
     let tv_inner = TimeVal {
@@ -71,8 +78,11 @@ pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
 
 /// get task info
 pub fn sys_task_info(ti: *mut TaskInfo) -> isize {
-    trace!("[Kernel] sys_task_info");
-    let current_task_info = get_current_task_task_info_inner();
+    trace!(
+        "[Kernel] pid[{}] sys_task_info",
+        current_task().unwrap().pid.0
+    );
+    let current_task_info = current_task_info_inner();
 
     let task_info = TaskInfo {
         status: TaskStatus::Running,
@@ -89,7 +99,7 @@ pub fn sys_task_info(ti: *mut TaskInfo) -> isize {
 }
 
 pub fn sys_mmap(start: usize, len: usize, port: usize) -> isize {
-    trace!("[Kernel] sys_mmap");
+    trace!("[Kernel] pid[{}] sys_mmap", current_task().unwrap().pid.0);
 
     if port & 0x07 == 0 || port & !0x7 != 0 || start & (PAGE_SIZE - 1) != 0 {
         return -1;
@@ -120,13 +130,13 @@ pub fn sys_mmap(start: usize, len: usize, port: usize) -> isize {
         return -1;
     }
 
-    mapping_address_for_current_task(start_va, end_va, map_perm);
+    mapping_address_space_for_current_task(start_va, end_va, map_perm);
 
     0
 }
 
 pub fn sys_munmap(start: usize, len: usize) -> isize {
-    trace!("[Kernel] sys_munmap");
+    trace!("[Kernel] pid[{}] sys_munmap", current_task().unwrap().pid.0);
 
     if start % PAGE_SIZE != 0 {
         return -1;
@@ -141,7 +151,100 @@ pub fn sys_munmap(start: usize, len: usize) -> isize {
         return -1;
     }
 
-    unmapping_address_for_current_task(start_va, end_va);
+    unmapping_address_space_for_current_task(start_va, end_va);
 
     0
+}
+pub fn sys_fork() -> isize {
+    trace!("[Kernel] pid[{}] sys_fork", current_task().unwrap().pid.0);
+
+    let current_task = current_task().unwrap();
+    let new_task = current_task.fork();
+    let new_pid = new_task.pid.0;
+    let trap_cx = new_task.inner_exclusive_access().get_trap_cx();
+    // 修改当前任务的返回值为0
+    trap_cx.x[10] = 0;
+
+    add_task(new_task);
+
+    new_pid as isize
+}
+
+pub fn sys_exec(path: *const u8) -> isize {
+    trace!("[Kernel] pid[{}] sys_exec", current_task().unwrap().pid.0);
+
+    // 在用户地址空间中找到要执行的elf名字
+    let token = current_user_token();
+    let path = translated_str(token, path);
+
+    // 如果存在对于的app，则进行sys_exec
+    if let Some(data) = get_app_data_by_name(path.as_str()) {
+        let task = current_task().unwrap();
+        task.exec(data);
+        0
+    } else {
+        // 在user shell中判断返回值来确定是否存在相应的应用
+        -1
+    }
+}
+
+/// sys_waitpid
+pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
+    trace!(
+        "[Kernel] pid[{}] sys_waitpid",
+        current_task().unwrap().pid.0
+    );
+
+    // 获取当前任务
+    let task = current_task().unwrap();
+
+    // 当pid == -1时，等待任意一个子进程即可
+    let mut inner = task.inner_exclusive_access();
+    if !inner
+        .child
+        .iter()
+        .any(|p| p.get_pid() == pid as usize || pid == -1)
+    {
+        return -1;
+        // release current tcb
+    }
+
+    let pair = inner.child.iter().enumerate().find(|(_, p)| {
+        p.inner_exclusive_access().is_zombie() && (pid == -1 || p.get_pid() == pid as usize)
+    });
+
+    if let Some((idx, _)) = pair {
+        let child = inner.child.remove(idx);
+        assert_eq!(Arc::strong_count(&child), 1);
+        let found_pid = child.get_pid();
+        let exit_code = child.inner_exclusive_access().exit_code;
+        // 将exit_code写入到进程数据中
+        *translated_refmut(inner.memory_set.token(), exit_code_ptr) = exit_code;
+        found_pid as isize
+    } else {
+        // 没有进程可以回收
+        -2
+    }
+}
+
+/// change data segment size
+pub fn sys_sbrk(size: i32) -> isize {
+    trace!(
+        "[Kernel] pid[{}] sys_sbrk args[0] = {:x}",
+        current_task().unwrap().pid.0,
+        size
+    );
+
+    if let Some(old_brk) = current_task().unwrap().change_program_brk(size) {
+        old_brk as isize
+    } else {
+        -1
+    }
+}
+
+/// get pid
+pub fn sys_getpid() -> isize {
+    trace!("[Kernel] pid[{}] sys_getpid", current_task().unwrap().pid.0);
+
+    current_task().unwrap().pid.0 as isize
 }

@@ -230,6 +230,7 @@ impl MemorySet {
                 let map_area = MapArea::new(start_va, end_va, MapType::Framed, map_perm);
 
                 max_end_vpn = map_area.vpn_range.get_end();
+                // 同时复制数据
                 memort_set.push(
                     map_area,
                     Some(&elf.input[ph.offset() as usize..(ph.offset() + ph.file_size()) as usize]),
@@ -239,15 +240,29 @@ impl MemorySet {
 
         let max_end_va: VirtAddr = max_end_vpn.into();
         // 处理栈空间
-        // TODO:为什么用户栈会在这个位置？
+        // 2024-11-12 看起来是约定好的
+        // 2024-11-25 entry是0 用户栈实际上是在恢复上下文的时候直接写入到sp中
         let mut user_stack_bottom: usize = max_end_va.into();
 
         // 保护页面
         user_stack_bottom += PAGE_SIZE;
         let user_stack_top = user_stack_bottom + USER_STACK_SIZE;
+
+        // 迭代器左闭右开，因此user_stack_top并没映射上去
         memort_set.push(
             MapArea::new(
                 user_stack_bottom.into(),
+                user_stack_top.into(),
+                MapType::Framed,
+                MapPermission::R | MapPermission::W | MapPermission::U,
+            ),
+            None,
+        );
+
+        // used for sbrk
+        memort_set.push(
+            MapArea::new(
+                user_stack_top.into(),
                 user_stack_top.into(),
                 MapType::Framed,
                 MapPermission::R | MapPermission::W | MapPermission::U,
@@ -276,6 +291,11 @@ impl MemorySet {
     /// 当前地址空间的token，通常用于设置satp寄存器
     pub fn token(&self) -> usize {
         self.page_table.token()
+    }
+
+    /// remove all
+    pub fn recycle_data_pages(&mut self) {
+        self.areas.clear();
     }
 
     /// 切换当前地址空间对应的页表
@@ -317,6 +337,74 @@ impl MemorySet {
                 true
             }
         })
+    }
+
+    /// remove a area
+    pub fn remove_area_with_start_vpn(&mut self, start_vpn: VirtPageNum) {
+        // 找到一个MapArea， start_vpn与该MapArea的start相同，然后删去该MapArea
+        if let Some((idx, area)) = self
+            .areas
+            .iter_mut()
+            .enumerate()
+            .find(|(_, area)| area.vpn_range.get_start() == start_vpn)
+        {
+            area.unmap(&mut self.page_table);
+            self.areas.remove(idx);
+        }
+    }
+
+    /// 从另外一个MemorySet构造一个新的MemorySet
+    pub fn from_existed_user(user_space: &MemorySet) -> MemorySet {
+        let mut memory_set = Self::new_bare();
+
+        memory_set.map_trampoline();
+
+        for area in user_space.areas.iter() {
+            // 构建新的MapArea
+            let new_area = MapArea::from_another(area);
+            // 将新复制的MapArea放入到新的MemorySet中
+            // 在页表中映射MapArea, 但是还不用复制数据，所以data为None
+            memory_set.push(new_area, None);
+            // 将刚刚构建出的MapArea的数据复制一份到新的中
+            // 复制数据
+            for vpn in area.vpn_range {
+                let src_ppn = user_space.translate(vpn).unwrap().ppn();
+                let dst_ppn = memory_set.translate(vpn).unwrap().ppn();
+                dst_ppn
+                    .get_bytes_array()
+                    .copy_from_slice(src_ppn.get_bytes_array());
+            }
+        }
+
+        memory_set
+    }
+
+    /// shrink the area to new_end
+    pub fn shrink_to(&mut self, start: VirtAddr, new_end: VirtAddr) -> bool {
+        if let Some(area) = self
+            .areas
+            .iter_mut()
+            .find(|area| area.vpn_range.get_start() == start.floor())
+        {
+            area.shrink_to(&mut self.page_table, new_end.ceil());
+            true
+        } else {
+            false
+        }
+    }
+
+    /// append the area to new_end
+    pub fn append_to(&mut self, start: VirtAddr, new_end: VirtAddr) -> bool {
+        if let Some(area) = self
+            .areas
+            .iter_mut()
+            .find(|area| area.vpn_range.get_start() == start.floor())
+        {
+            area.append_to(&mut self.page_table, new_end.ceil());
+            true
+        } else {
+            false
+        }
     }
 }
 
@@ -456,6 +544,33 @@ impl MapArea {
     pub fn get_end(&self) -> VirtPageNum {
         self.vpn_range.get_end()
     }
+
+    /// 复制另外一个MapArea
+    pub fn from_another(another: &MapArea) -> Self {
+        Self {
+            vpn_range: VPNRange::new(another.vpn_range.get_start(), another.vpn_range.get_end()),
+            data_frames: BTreeMap::new(),
+            map_type: another.map_type,
+            map_perm: another.map_perm,
+        }
+    }
+
+    /// 减少地址空间
+    pub fn shrink_to(&mut self, page_table: &mut PageTable, new_end: VirtPageNum) {
+        for vpn in VPNRange::new(new_end, self.vpn_range.get_end()) {
+            self.unmap_one(page_table, vpn);
+        }
+        // 左闭右开
+        self.vpn_range = VPNRange::new(self.vpn_range.get_start(), new_end);
+    }
+
+    /// 增加
+    pub fn append_to(&mut self, page_table: &mut PageTable, new_end: VirtPageNum) {
+        for vpn in VPNRange::new(self.vpn_range.get_end(), new_end) {
+            self.map_one(page_table, vpn);
+        }
+        self.vpn_range = VPNRange::new(self.vpn_range.get_start(), new_end);
+    }
 }
 
 lazy_static! {
@@ -471,4 +586,36 @@ pub fn kernel_stack_position(app_id: usize) -> (usize, usize) {
     let top = TRAMPOLINE - app_id * (KERNEL_STACK_SIZE + PAGE_SIZE);
     let bottom = top - KERNEL_STACK_SIZE;
     (bottom, top)
+}
+
+/// remap test in kernel_space
+#[allow(unused)]
+pub fn remap_test() {
+    let mut kernel_space = KERNEL_SPACE.exclusive_access();
+    let mid_text: VirtAddr = ((stext as usize + etext as usize) / 2).into();
+    let mid_rodata: VirtAddr = ((srodata as usize + erodata as usize) / 2).into();
+    let mid_data: VirtAddr = ((sdata as usize + edata as usize) / 2).into();
+
+    // 文本段不可写
+    assert!(!kernel_space
+        .page_table
+        .translate(mid_text.floor())
+        .unwrap()
+        .is_writable());
+
+    // rodata段不可写
+    assert!(!kernel_space
+        .page_table
+        .translate(mid_rodata.floor())
+        .unwrap()
+        .is_writable());
+
+    // data段不可执行
+    assert!(!kernel_space
+        .page_table
+        .translate(mid_data.floor())
+        .unwrap()
+        .is_executable());
+
+    println!("[Kernel] remap_test passed!");
 }

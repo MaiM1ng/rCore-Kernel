@@ -15,7 +15,7 @@ use riscv::register::{
 use crate::{
     task::{
         current_trap_cx, current_user_token, exit_current_and_run_next,
-        suspended_current_and_run_next,
+        suspend_current_and_run_next,
     },
     timer::set_next_trigger,
 };
@@ -40,30 +40,40 @@ pub fn trap_handler() -> ! {
     set_kernel_trap_entry();
     // 当前应用程序的TrapContext PPN
     // 由于内核是恒等映射的
-    let cx = current_trap_cx();
     // 读取S态寄存器状态
     let scause = scause::read();
     let stval = stval::read();
 
     match scause.cause() {
         Trap::Exception(Exception::UserEnvCall) => {
+            // 当前应用的Trap上下文
+            let mut cx = current_trap_cx();
             cx.sepc += 4;
-            cx.x[10] = syscall(cx.x[17], [cx.x[10], cx.x[11], cx.x[12]]) as usize;
+            let result = syscall(cx.x[17], [cx.x[10], cx.x[11], cx.x[12]]) as usize;
+            // 对于exec系统调用：旧的cx上下文已经被回收了，此时需要重新获取新的cx
+            // 对于fork系统调用：父进程的x10在syscall中被修改，但是子进程的还未修改
+            // 子进程的第一步入口一样在这个位置，因此需要修改子进程的返回值
+            cx = current_trap_cx();
+            // 父进程相当于重复写入相同的值
+            cx.x[10] = result as usize;
         }
         Trap::Exception(Exception::StoreFault)
         | Trap::Exception(Exception::StorePageFault)
+        | Trap::Exception(Exception::InstructionFault)
+        | Trap::Exception(Exception::InstructionPageFault)
         | Trap::Exception(Exception::LoadFault)
         | Trap::Exception(Exception::LoadPageFault) => {
-            println!("[Kernel] PageFault in application, bad addr = {:#x}, bad instruction = {:#x}, kernel killed it.", stval, cx.sepc);
-            exit_current_and_run_next();
+            println!("[Kernel] trap_handler: {:?} in application, bad addr = {:#x}, bad instruction = {:#x} kernel killed it!", scause.cause(), stval, current_trap_cx().sepc);
+            // page fault exit code
+            exit_current_and_run_next(-2);
         }
         Trap::Exception(Exception::IllegalInstruction) => {
             println!("[Kernel] IllegalInstruction in application! Kernel killed it.");
-            exit_current_and_run_next();
+            exit_current_and_run_next(-3);
         }
         Trap::Interrupt(Interrupt::SupervisorTimer) => {
             set_next_trigger();
-            suspended_current_and_run_next();
+            suspend_current_and_run_next();
         }
         _ => {
             panic!(

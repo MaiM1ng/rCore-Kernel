@@ -73,6 +73,11 @@ impl PhysAddr {
     pub fn aligned(&self) -> bool {
         self.page_offset() == 0
     }
+
+    /// 获取可变引用的泛型
+    pub fn get_mut<T>(&self) -> &'static mut T {
+        unsafe { (self.0 as *mut T).as_mut().unwrap() }
+    }
 }
 
 /// PhysAddr -> PhysPageNum
@@ -288,6 +293,7 @@ where
     type Item = T;
     fn next(&mut self) -> Option<Self::Item> {
         if self.current == self.end {
+            // 左闭右开
             None
         } else {
             let t = self.current;

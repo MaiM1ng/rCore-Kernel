@@ -5,7 +5,7 @@ use core::usize;
 #[allow(unused)]
 
 /// size of user stack
-pub const USER_STACK_SIZE: usize = 4096;
+pub const USER_STACK_SIZE: usize = 4096 * 2;
 /// size of kernel stack
 pub const KERNEL_STACK_SIZE: usize = 4096 * 2;
 /// max number of application

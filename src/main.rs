@@ -28,6 +28,8 @@ pub mod task;
 pub mod timer;
 pub mod trap;
 
+use task::add_initproc;
+
 core::arch::global_asm!(include_str!("entry.asm"));
 core::arch::global_asm!(include_str!("link_app.S"));
 
@@ -50,11 +52,16 @@ pub fn rust_main() -> ! {
     println!("[Kernel] Hello, World!");
 
     mm::init();
+    mm::remap_test();
+
+    add_initproc();
+    println!("[Kernel] After initproc!");
 
     trap::init();
     trap::enable_timer_interrupt();
     timer::set_next_trigger();
-    task::run_first_task();
+    loader::list_apps();
+    task::run_tasks();
 
     panic!("unreachable in rust_main!");
 }

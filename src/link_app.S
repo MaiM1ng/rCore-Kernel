@@ -3,7 +3,7 @@
     .section .data
     .global _num_app
 _num_app:
-    .quad 11
+    .quad 19
     .quad app_0_start
     .quad app_1_start
     .quad app_2_start
@@ -15,7 +15,37 @@ _num_app:
     .quad app_8_start
     .quad app_9_start
     .quad app_10_start
-    .quad app_10_end
+    .quad app_11_start
+    .quad app_12_start
+    .quad app_13_start
+    .quad app_14_start
+    .quad app_15_start
+    .quad app_16_start
+    .quad app_17_start
+    .quad app_18_start
+    .quad app_18_end
+
+    .global _app_names
+_app_names:
+    .string "ch2b_bad_address"
+    .string "ch2b_bad_instructions"
+    .string "ch2b_bad_register"
+    .string "ch2b_hello_world"
+    .string "ch2b_power_3"
+    .string "ch2b_power_5"
+    .string "ch2b_power_7"
+    .string "ch3b_yield0"
+    .string "ch3b_yield1"
+    .string "ch3b_yield2"
+    .string "ch4b_sbrk"
+    .string "ch5b_exit"
+    .string "ch5b_forktest"
+    .string "ch5b_forktest2"
+    .string "ch5b_forktest_simple"
+    .string "ch5b_forktree"
+    .string "ch5b_initproc"
+    .string "ch5b_user_shell"
+    .string "ch5b_usertest"
 
     .section .data
     .global app_0_start
@@ -104,3 +134,67 @@ app_9_end:
 app_10_start:
     .incbin "../rCore-Tutorial-Code-2024S/user/build/elf/ch4b_sbrk.elf"
 app_10_end:
+
+    .section .data
+    .global app_11_start
+    .global app_11_end
+    .align 3
+app_11_start:
+    .incbin "../rCore-Tutorial-Code-2024S/user/build/elf/ch5b_exit.elf"
+app_11_end:
+
+    .section .data
+    .global app_12_start
+    .global app_12_end
+    .align 3
+app_12_start:
+    .incbin "../rCore-Tutorial-Code-2024S/user/build/elf/ch5b_forktest.elf"
+app_12_end:
+
+    .section .data
+    .global app_13_start
+    .global app_13_end
+    .align 3
+app_13_start:
+    .incbin "../rCore-Tutorial-Code-2024S/user/build/elf/ch5b_forktest2.elf"
+app_13_end:
+
+    .section .data
+    .global app_14_start
+    .global app_14_end
+    .align 3
+app_14_start:
+    .incbin "../rCore-Tutorial-Code-2024S/user/build/elf/ch5b_forktest_simple.elf"
+app_14_end:
+
+    .section .data
+    .global app_15_start
+    .global app_15_end
+    .align 3
+app_15_start:
+    .incbin "../rCore-Tutorial-Code-2024S/user/build/elf/ch5b_forktree.elf"
+app_15_end:
+
+    .section .data
+    .global app_16_start
+    .global app_16_end
+    .align 3
+app_16_start:
+    .incbin "../rCore-Tutorial-Code-2024S/user/build/elf/ch5b_initproc.elf"
+app_16_end:
+
+    .section .data
+    .global app_17_start
+    .global app_17_end
+    .align 3
+app_17_start:
+    .incbin "../rCore-Tutorial-Code-2024S/user/build/elf/ch5b_user_shell.elf"
+app_17_end:
+
+    .section .data
+    .global app_18_start
+    .global app_18_end
+    .align 3
+app_18_start:
+    .incbin "../rCore-Tutorial-Code-2024S/user/build/elf/ch5b_usertest.elf"
+app_18_end:
