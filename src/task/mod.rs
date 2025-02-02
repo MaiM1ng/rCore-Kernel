@@ -4,6 +4,7 @@ mod context;
 mod manager;
 mod pid;
 mod processor;
+mod scheduler;
 mod switch;
 #[allow(clippy::module_inception)]
 mod task;
@@ -18,6 +19,7 @@ pub use processor::{
     mapping_address_space_for_current_task, run_tasks, schedule, take_current_task,
     unmapping_address_space_for_current_task, update_current_task_syscall_times,
 };
+pub use scheduler::BIG_STRIDE;
 pub use task::{exit_current_and_run_next, TaskControlBlock, TaskStatus};
 
 lazy_static! {

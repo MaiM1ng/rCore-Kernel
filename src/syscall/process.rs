@@ -9,7 +9,7 @@ use crate::mm::{
 use crate::task::{
     add_task, current_task, current_task_info_inner, current_user_token, exit_current_and_run_next,
     mapping_address_space_for_current_task, suspend_current_and_run_next,
-    unmapping_address_space_for_current_task, TaskStatus,
+    unmapping_address_space_for_current_task, TaskControlBlock, TaskStatus,
 };
 use crate::timer::{get_time_ms, get_time_us};
 use alloc::sync::Arc;
@@ -155,6 +155,7 @@ pub fn sys_munmap(start: usize, len: usize) -> isize {
 
     0
 }
+
 pub fn sys_fork() -> isize {
     trace!("[Kernel] pid[{}] sys_fork", current_task().unwrap().pid.0);
 
@@ -247,4 +248,53 @@ pub fn sys_getpid() -> isize {
     trace!("[Kernel] pid[{}] sys_getpid", current_task().unwrap().pid.0);
 
     current_task().unwrap().pid.0 as isize
+}
+
+/// sys_spawn
+pub fn sys_spawn(path: *const u8) -> isize {
+    trace!("[Kernel] pid[{}] sys_spawn", current_task().unwrap().pid.0);
+
+    let token = current_user_token();
+    let path_name = translated_str(token, path);
+
+    if let Some(data) = get_app_data_by_name(path_name.as_str()) {
+        // 此时有这个app 需要检查进程池和内存是否足够分配
+        let new_task_tcb = Arc::new(TaskControlBlock::new(data));
+        let new_pid = new_task_tcb.pid.0;
+        // 当前的父进程
+        let current_task_tcb = current_task().unwrap();
+        let mut current_task_inner = current_task_tcb.inner_exclusive_access();
+
+        // 配置父子关系
+        let mut new_task_tcb_inner = new_task_tcb.inner_exclusive_access();
+        new_task_tcb_inner.parent = current_task().as_ref().map(|arc| Arc::downgrade(arc));
+
+        current_task_inner.child.push(new_task_tcb.clone());
+        // spawn调用成功！
+        // 返回子进程id
+        drop(current_task_inner);
+        drop(new_task_tcb_inner);
+        add_task(new_task_tcb);
+
+        new_pid as isize
+    } else {
+        // 没有这个APP 直接返回即可
+        -1
+    }
+}
+
+/// set prio
+pub fn sys_set_prio(prio: isize) -> isize {
+    trace!(
+        "[Kernel] pid[{}] sys_set_prio",
+        current_task().unwrap().pid.0
+    );
+
+    if prio <= 1 {
+        return -1;
+    }
+
+    current_task().unwrap().inner_exclusive_access().prio = prio as usize;
+
+    prio as isize
 }

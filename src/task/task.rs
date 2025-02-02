@@ -6,7 +6,7 @@ use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
 
 use super::pid::{pid_alloc, KernelStack, PidHandle};
-use super::{schedule, take_current_task, TaskContext, INITPROC};
+use super::{schedule, take_current_task, TaskContext, BIG_STRIDE, INITPROC};
 use crate::config::{MAX_SYSCALL_NUM, TRAP_CONTEXT_BASE};
 use crate::mm::{MapPermission, MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::sync::UPSafeCell;
@@ -49,6 +49,10 @@ pub struct TaskControlBlockInner {
     pub heap_bottom: usize,
     /// program break
     pub program_brk: usize,
+    /// 优先级
+    pub prio: usize,
+    /// Stride优先级
+    pub stride: usize,
 }
 
 #[derive(Copy, Clone)]
@@ -138,6 +142,8 @@ impl TaskControlBlock {
                     task_info_inner: TaskInfoInner::zero_init(),
                     heap_bottom: user_sp,
                     program_brk: user_sp,
+                    stride: 0,
+                    prio: 16,
                 })
             },
         };
@@ -218,6 +224,8 @@ impl TaskControlBlock {
                     // 与父进程完全保持一致
                     heap_bottom: parent_inner.heap_bottom,
                     program_brk: parent_inner.program_brk,
+                    stride: 0,
+                    prio: parent_inner.prio,
                 })
             },
         });
@@ -269,6 +277,13 @@ impl TaskControlBlock {
         } else {
             None
         }
+    }
+
+    /// 更新Stride
+    pub fn update_stride(&self) {
+        let mut inner = self.inner_exclusive_access();
+        let pass = BIG_STRIDE / inner.prio;
+        inner.stride += pass;
     }
 }
 

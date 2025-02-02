@@ -1,28 +1,46 @@
+use core::usize::MAX;
+
 use crate::sync::UPSafeCell;
 
 use super::TaskControlBlock;
-use alloc::collections::vec_deque::VecDeque;
 use alloc::sync::Arc;
+use alloc::vec::Vec;
 use lazy_static::*;
 
 pub struct TaskManager {
     /// 就绪队列
-    ready_queue: VecDeque<Arc<TaskControlBlock>>,
+    ready_queue: Vec<Arc<TaskControlBlock>>,
 }
 
 impl TaskManager {
     pub fn new() -> Self {
         Self {
-            ready_queue: VecDeque::new(),
+            ready_queue: Vec::new(),
         }
     }
 
     pub fn add(&mut self, task: Arc<TaskControlBlock>) {
-        self.ready_queue.push_back(task);
+        self.ready_queue.push(task);
     }
 
     pub fn fetch(&mut self) -> Option<Arc<TaskControlBlock>> {
-        self.ready_queue.pop_front()
+        let mut min_stride = MAX;
+        let mut min_stride_idx = MAX;
+
+        for (cur_idx, res) in self.ready_queue.iter().enumerate() {
+            let current_stride = res.inner_exclusive_access().stride;
+            if min_stride > current_stride {
+                min_stride_idx = cur_idx;
+                min_stride = current_stride;
+            }
+        }
+
+        if min_stride_idx == MAX {
+            None
+        } else {
+            self.ready_queue[min_stride_idx].update_stride();
+            Some(self.ready_queue.remove(min_stride_idx))
+        }
     }
 }
 

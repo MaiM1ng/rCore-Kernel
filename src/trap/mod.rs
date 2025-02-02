@@ -73,6 +73,7 @@ pub fn trap_handler() -> ! {
         }
         Trap::Interrupt(Interrupt::SupervisorTimer) => {
             set_next_trigger();
+            // stride不能在这里更新
             suspend_current_and_run_next();
         }
         _ => {
