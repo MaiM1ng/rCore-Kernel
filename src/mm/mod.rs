@@ -7,14 +7,17 @@ mod heap_allocator;
 mod memory_set;
 mod page_table;
 
-pub use address::{PhysAddr, PhysPageNum, VirtAddr, VirtPageNum};
+pub use address::{PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum};
+pub use frame_allocator::{frame_alloc, frame_dealloc, FrameTracker};
 use heap_allocator::heap_test;
 pub use memory_set::{
-    kernel_stack_position, remap_test, MapArea, MapPermission, MapType, MemorySet, KERNEL_SPACE,
+    kernel_stack_position, kernel_token, remap_test, MapArea, MapPermission, MapType, MemorySet,
+    KERNEL_SPACE,
 };
 pub use page_table::{
     check_map_area_mapping, check_map_area_unmapping, translated_and_write_bytes,
-    translated_byte_buffer, translated_refmut, translated_str,
+    translated_byte_buffer, translated_refmut, translated_str, PageTable, PageTableEntry,
+    UserBuffer,
 };
 
 /// mm subsystem init

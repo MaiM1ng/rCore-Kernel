@@ -38,3 +38,6 @@ pub const TRAMPOLINE: usize = usize::MAX - PAGE_SIZE + 1;
 /// the VA of trap context
 // TRAMPOLINE已经页对齐了
 pub const TRAP_CONTEXT_BASE: usize = TRAMPOLINE - PAGE_SIZE;
+
+/// MMIO Map
+pub const MMIO: &[(usize, usize)] = &[(0x10001000, 0x1000)];

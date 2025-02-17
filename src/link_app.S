@@ -3,7 +3,7 @@
     .section .data
     .global _num_app
 _num_app:
-    .quad 42
+    .quad 52
     .quad app_0_start
     .quad app_1_start
     .quad app_2_start
@@ -46,7 +46,17 @@ _num_app:
     .quad app_39_start
     .quad app_40_start
     .quad app_41_start
-    .quad app_41_end
+    .quad app_42_start
+    .quad app_43_start
+    .quad app_44_start
+    .quad app_45_start
+    .quad app_46_start
+    .quad app_47_start
+    .quad app_48_start
+    .quad app_49_start
+    .quad app_50_start
+    .quad app_51_start
+    .quad app_51_end
 
     .global _app_names
 _app_names:
@@ -92,6 +102,16 @@ _app_names:
     .string "ch5b_initproc"
     .string "ch5b_user_shell"
     .string "ch5b_usertest"
+    .string "ch6_file0"
+    .string "ch6_file1"
+    .string "ch6_file2"
+    .string "ch6_file3"
+    .string "ch6_usertest"
+    .string "ch6b_cat"
+    .string "ch6b_filetest_simple"
+    .string "ch6b_initproc"
+    .string "ch6b_user_shell"
+    .string "ch6b_usertest"
 
     .section .data
     .global app_0_start
@@ -428,3 +448,83 @@ app_40_end:
 app_41_start:
     .incbin "../rCore-Tutorial-Code-2024S/user/build/elf/ch5b_usertest.elf"
 app_41_end:
+
+    .section .data
+    .global app_42_start
+    .global app_42_end
+    .align 3
+app_42_start:
+    .incbin "../rCore-Tutorial-Code-2024S/user/build/elf/ch6_file0.elf"
+app_42_end:
+
+    .section .data
+    .global app_43_start
+    .global app_43_end
+    .align 3
+app_43_start:
+    .incbin "../rCore-Tutorial-Code-2024S/user/build/elf/ch6_file1.elf"
+app_43_end:
+
+    .section .data
+    .global app_44_start
+    .global app_44_end
+    .align 3
+app_44_start:
+    .incbin "../rCore-Tutorial-Code-2024S/user/build/elf/ch6_file2.elf"
+app_44_end:
+
+    .section .data
+    .global app_45_start
+    .global app_45_end
+    .align 3
+app_45_start:
+    .incbin "../rCore-Tutorial-Code-2024S/user/build/elf/ch6_file3.elf"
+app_45_end:
+
+    .section .data
+    .global app_46_start
+    .global app_46_end
+    .align 3
+app_46_start:
+    .incbin "../rCore-Tutorial-Code-2024S/user/build/elf/ch6_usertest.elf"
+app_46_end:
+
+    .section .data
+    .global app_47_start
+    .global app_47_end
+    .align 3
+app_47_start:
+    .incbin "../rCore-Tutorial-Code-2024S/user/build/elf/ch6b_cat.elf"
+app_47_end:
+
+    .section .data
+    .global app_48_start
+    .global app_48_end
+    .align 3
+app_48_start:
+    .incbin "../rCore-Tutorial-Code-2024S/user/build/elf/ch6b_filetest_simple.elf"
+app_48_end:
+
+    .section .data
+    .global app_49_start
+    .global app_49_end
+    .align 3
+app_49_start:
+    .incbin "../rCore-Tutorial-Code-2024S/user/build/elf/ch6b_initproc.elf"
+app_49_end:
+
+    .section .data
+    .global app_50_start
+    .global app_50_end
+    .align 3
+app_50_start:
+    .incbin "../rCore-Tutorial-Code-2024S/user/build/elf/ch6b_user_shell.elf"
+app_50_end:
+
+    .section .data
+    .global app_51_start
+    .global app_51_end
+    .align 3
+app_51_start:
+    .incbin "../rCore-Tutorial-Code-2024S/user/build/elf/ch6b_usertest.elf"
+app_51_end:

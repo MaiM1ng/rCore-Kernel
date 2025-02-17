@@ -4,6 +4,9 @@ BUILD_MODE = release
 TARGET := riscv64gc-unknown-none-elf
 BUILD_DIR := target/$(TARGET)/$(BUILD_MODE)
 
+#FS
+FS_IMG := ../rCore-2024A/user/target/$(TARGET)/$(BUILD_MODE)/fs.img
+
 # build
 OS_EXEC := os
 OS_BIN := $(OS_EXEC).bin
@@ -24,6 +27,9 @@ QEMU := qemu-system-riscv64
 QEMU_FLAGS := -machine virt \
 							-nographic \
 							-bios $(BOOTLOADER) \
+							-device loader,file=$(BUILD_DIR)/$(OS_BIN),addr=$(OS_ENTRY_ADDR) \
+							-drive file=$(FS_IMG),if=none,format=raw,id=x0 \
+							-device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0 \
 
 # GDB
 GDB := riscv64-unknown-elf-gdb
@@ -51,10 +57,10 @@ build: kernel
 	$(OBJCPY) $(OBJCPY_FLAGS) $(BUILD_DIR)/$(OS_EXEC) $(BUILD_DIR)/$(OS_BIN)
 
 run: $(BUILD_DIR)/$(OS_BIN)
-	$(QEMU) $(QEMU_FLAGS) -device loader,file=$(BUILD_DIR)/$(OS_BIN),addr=$(OS_ENTRY_ADDR)
+	$(QEMU) $(QEMU_FLAGS)
 
 server: $(BUILD_DIR)/$(OS_BIN)
-	$(QEMU) $(QEMU_FLAGS) -device loader,file=$(BUILD_DIR)/$(OS_BIN),addr=$(OS_ENTRY_ADDR) -s -S
+	$(QEMU) $(QEMU_FLAGS) -s -S
 
 telnet: $(BUILD_DIR)/$(OS_EXEC)
 	$(GDB) $(GDB_FLAGS)

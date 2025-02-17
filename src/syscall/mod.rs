@@ -1,7 +1,12 @@
 //! define syscall id and syscall entry
 
+const SYSCALL_UNLINKAT: usize = 35;
+const SYSCALL_LINKAT: usize = 37;
+const SYSCALL_OPEN: usize = 56;
+const SYSCALL_CLOSE: usize = 57;
 const SYSCALL_READ: usize = 63;
 const SYSCALL_WRITE: usize = 64;
+const SYSCALL_FSTAT: usize = 80;
 const SYSCALL_EXIT: usize = 93;
 const SYSCALL_YIELD: usize = 124;
 const SYSCALL_SET_PRIO: usize = 140;
@@ -22,13 +27,18 @@ mod process;
 use fs::*;
 use process::*;
 
-use crate::task::update_current_task_syscall_times;
+use crate::{fs::Stat, task::update_current_task_syscall_times};
 
 /// syscall entry
-pub fn syscall(syscall_id: usize, args: [usize; 3]) -> isize {
+pub fn syscall(syscall_id: usize, args: [usize; 5]) -> isize {
     update_current_task_syscall_times(syscall_id);
 
     match syscall_id {
+        SYSCALL_LINKAT => sys_linkat(args[1] as *const u8, args[3] as *const u8),
+        SYSCALL_UNLINKAT => sys_unlinkat(args[1] as *const u8),
+        SYSCALL_FSTAT => sys_fstat(args[0] as usize, args[1] as *mut Stat),
+        SYSCALL_OPEN => sys_open(args[1] as *const u8, args[2] as u32),
+        SYSCALL_CLOSE => sys_close(args[0]),
         SYSCALL_READ => sys_read(args[0], args[1] as *const u8, args[2]),
         SYSCALL_WRITE => sys_write(args[0], args[1] as *const u8, args[2]),
         SYSCALL_EXIT => sys_exit(args[0] as i32),

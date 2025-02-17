@@ -5,6 +5,7 @@ mod context;
 use crate::{
     config::{TRAMPOLINE, TRAP_CONTEXT_BASE},
     syscall::syscall,
+    task::current_task,
 };
 use core::arch::global_asm;
 use riscv::register::{
@@ -49,7 +50,8 @@ pub fn trap_handler() -> ! {
             // 当前应用的Trap上下文
             let mut cx = current_trap_cx();
             cx.sepc += 4;
-            let result = syscall(cx.x[17], [cx.x[10], cx.x[11], cx.x[12]]) as usize;
+            let result =
+                syscall(cx.x[17], [cx.x[10], cx.x[11], cx.x[12], cx.x[13], cx.x[14]]) as usize;
             // 对于exec系统调用：旧的cx上下文已经被回收了，此时需要重新获取新的cx
             // 对于fork系统调用：父进程的x10在syscall中被修改，但是子进程的还未修改
             // 子进程的第一步入口一样在这个位置，因此需要修改子进程的返回值
@@ -63,12 +65,15 @@ pub fn trap_handler() -> ! {
         | Trap::Exception(Exception::InstructionPageFault)
         | Trap::Exception(Exception::LoadFault)
         | Trap::Exception(Exception::LoadPageFault) => {
-            println!("[Kernel] trap_handler: {:?} in application, bad addr = {:#x}, bad instruction = {:#x} kernel killed it!", scause.cause(), stval, current_trap_cx().sepc);
+            println!("[Kernel] pid[{}] trap_handler: {:?} in application, bad addr = {:#x}, bad instruction = {:#x} kernel killed it!", current_task().unwrap().pid.0, scause.cause(), stval, current_trap_cx().sepc);
             // page fault exit code
             exit_current_and_run_next(-2);
         }
         Trap::Exception(Exception::IllegalInstruction) => {
-            println!("[Kernel] IllegalInstruction in application! Kernel killed it.");
+            println!(
+                "[Kernel] pid[{}] IllegalInstruction in application! Kernel killed it.",
+                current_task().unwrap().pid.0
+            );
             exit_current_and_run_next(-3);
         }
         Trap::Interrupt(Interrupt::SupervisorTimer) => {

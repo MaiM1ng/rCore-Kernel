@@ -1,7 +1,6 @@
 //! Syscall: Process management syscalls
-
 use crate::config::{MAX_SYSCALL_NUM, PAGE_SIZE};
-use crate::loader::get_app_data_by_name;
+use crate::fs::{open_file, OpenFlags};
 use crate::mm::{
     check_map_area_mapping, check_map_area_unmapping, translated_and_write_bytes,
     translated_refmut, translated_str, MapArea, MapPermission, MapType, VirtAddr,
@@ -176,15 +175,14 @@ pub fn sys_exec(path: *const u8) -> isize {
 
     // 在用户地址空间中找到要执行的elf名字
     let token = current_user_token();
-    let path = translated_str(token, path);
+    let path_name = translated_str(token, path);
 
-    // 如果存在对于的app，则进行sys_exec
-    if let Some(data) = get_app_data_by_name(path.as_str()) {
+    if let Some(app_inode) = open_file(path_name.as_str(), OpenFlags::RDONLY) {
         let task = current_task().unwrap();
-        task.exec(data);
+        let all_data = app_inode.read_all();
+        task.exec(all_data.as_slice());
         0
     } else {
-        // 在user shell中判断返回值来确定是否存在相应的应用
         -1
     }
 }
@@ -215,6 +213,7 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
     });
 
     if let Some((idx, _)) = pair {
+        // 这里就是清除资源
         let child = inner.child.remove(idx);
         assert_eq!(Arc::strong_count(&child), 1);
         let found_pid = child.get_pid();
@@ -251,15 +250,23 @@ pub fn sys_getpid() -> isize {
 }
 
 /// sys_spawn
-pub fn sys_spawn(path: *const u8) -> isize {
+#[allow(unused)]
+pub fn sys_spawn1(path: *const u8) -> isize {
     trace!("[Kernel] pid[{}] sys_spawn", current_task().unwrap().pid.0);
 
     let token = current_user_token();
     let path_name = translated_str(token, path);
 
-    if let Some(data) = get_app_data_by_name(path_name.as_str()) {
+    if let Some(inode) = open_file(path_name.as_str(), OpenFlags::RDONLY) {
         // 此时有这个app 需要检查进程池和内存是否足够分配
-        let new_task_tcb = Arc::new(TaskControlBlock::new(data));
+        inode.dump_metadata();
+        let elf_data = inode.read_all();
+
+        if elf_data.len() == 0 {
+            println!("len = 0 ffuucckk");
+            return -1;
+        }
+        let new_task_tcb = Arc::new(TaskControlBlock::new(elf_data.as_slice()));
         let new_pid = new_task_tcb.pid.0;
         // 当前的父进程
         let current_task_tcb = current_task().unwrap();
@@ -279,6 +286,27 @@ pub fn sys_spawn(path: *const u8) -> isize {
         new_pid as isize
     } else {
         // 没有这个APP 直接返回即可
+        -1
+    }
+}
+
+#[allow(unused)]
+pub fn sys_spawn(path: *const u8) -> isize {
+    let token = current_user_token();
+    let path = translated_str(token, path);
+    if let Some(app_inode) = open_file(path.as_str(), OpenFlags::RDONLY) {
+        let all_data = app_inode.read_all();
+        let task = current_task().unwrap();
+        let new_task = task.spwan(all_data.as_slice());
+        let new_pid = new_task.pid.0;
+        // let trap_cx = new_task.inner_exclusive_access().get_trap_cx();
+        // // we do not have to move to next instruction since we have done it before
+        // // for child process, fork returns 0
+        // trap_cx.x[10] = 0;
+        // add new task to scheduler
+        add_task(new_task);
+        new_pid as isize
+    } else {
         -1
     }
 }

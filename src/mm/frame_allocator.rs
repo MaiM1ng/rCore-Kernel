@@ -87,6 +87,7 @@ pub fn init_frame_allocator() {
 // RAII
 /// 用于跟踪Physical Page Frame的生命周期
 pub struct FrameTracker {
+    /// 物理页帧号
     pub ppn: PhysPageNum,
 }
 
@@ -113,6 +114,7 @@ impl Drop for FrameTracker {
     }
 }
 
+/// 分配一个FrameTracker, 同时分配ppn
 pub fn frame_alloc() -> Option<FrameTracker> {
     // 如果alloc返回None，那么Map也会返回None
     FRAME_ALLOCATOR
@@ -121,6 +123,7 @@ pub fn frame_alloc() -> Option<FrameTracker> {
         .map(|ppn| FrameTracker::new(ppn))
 }
 
+/// 回收FrameTracker
 pub fn frame_dealloc(ppn: PhysPageNum) {
     FRAME_ALLOCATOR.exclusive_access().dealloc(ppn);
 }

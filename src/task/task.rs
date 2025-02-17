@@ -3,11 +3,13 @@
 use core::cell::RefMut;
 
 use alloc::sync::{Arc, Weak};
+use alloc::vec;
 use alloc::vec::Vec;
 
 use super::pid::{pid_alloc, KernelStack, PidHandle};
 use super::{schedule, take_current_task, TaskContext, BIG_STRIDE, INITPROC};
 use crate::config::{MAX_SYSCALL_NUM, TRAP_CONTEXT_BASE};
+use crate::fs::{File, Stdin, Stdout};
 use crate::mm::{MapPermission, MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::sync::UPSafeCell;
 use crate::trap::{trap_handler, TrapContext};
@@ -53,6 +55,8 @@ pub struct TaskControlBlockInner {
     pub prio: usize,
     /// Stride优先级
     pub stride: usize,
+    /// 打开文件表
+    pub fd_table: Vec<Option<Arc<dyn File + Send + Sync>>>,
 }
 
 #[derive(Copy, Clone)]
@@ -144,6 +148,14 @@ impl TaskControlBlock {
                     program_brk: user_sp,
                     stride: 0,
                     prio: 16,
+                    fd_table: vec![
+                        // 0 stdin
+                        Some(Arc::new(Stdin)),
+                        // 1 stdout
+                        Some(Arc::new(Stdout)),
+                        // 2 stderr
+                        Some(Arc::new(Stdout)),
+                    ],
                 })
             },
         };
@@ -205,6 +217,17 @@ impl TaskControlBlock {
         let pid_handle = pid_alloc();
         let kernel_stack = KernelStack::new(&pid_handle);
         let kernel_stack_top = kernel_stack.get_top();
+
+        // 复制fd_table
+        let mut new_fd_table: Vec<Option<Arc<dyn File + Send + Sync>>> = Vec::new();
+        for fd in parent_inner.fd_table.iter() {
+            if let Some(file) = fd {
+                new_fd_table.push(Some(file.clone()));
+            } else {
+                new_fd_table.push(None);
+            }
+        }
+
         // 使用ARC，实际的内存分配在堆上
         let task_control_block = Arc::new(TaskControlBlock {
             pid: pid_handle,
@@ -226,6 +249,7 @@ impl TaskControlBlock {
                     program_brk: parent_inner.program_brk,
                     stride: 0,
                     prio: parent_inner.prio,
+                    fd_table: new_fd_table,
                 })
             },
         });
@@ -285,6 +309,61 @@ impl TaskControlBlock {
         let pass = BIG_STRIDE / inner.prio;
         inner.stride += pass;
     }
+
+    /// spwan=fork+exec
+    pub fn spwan(self: &Arc<Self>, elf_data: &[u8]) -> Arc<Self> {
+        let mut parent_inner = self.inner_exclusive_access();
+        let (memory_set, user_sp, entry_point) = MemorySet::from_elf(elf_data);
+        let trap_cx_ppn = memory_set
+            .translate(VirtAddr::from(TRAP_CONTEXT_BASE).into())
+            .unwrap()
+            .ppn();
+        let pid_handle = pid_alloc();
+        let kernel_stack = KernelStack::new(&pid_handle);
+        let kernel_stack_top = kernel_stack.get_top();
+        // copy fd table
+        let mut new_fd_table: Vec<Option<Arc<dyn File + Send + Sync>>> = Vec::new();
+        for fd in parent_inner.fd_table.iter() {
+            if let Some(file) = fd {
+                new_fd_table.push(Some(file.clone()));
+            } else {
+                new_fd_table.push(None);
+            }
+        }
+
+        let task_control_block = Arc::new(TaskControlBlock {
+            pid: pid_handle,
+            kernel_stack,
+            inner: unsafe {
+                UPSafeCell::new(TaskControlBlockInner {
+                    task_status: TaskStatus::Ready,
+                    trap_cx_ppn,
+                    base_size: user_sp,
+                    task_cx: TaskContext::goto_trap_return(kernel_stack_top),
+                    task_info_inner: TaskInfoInner::zero_init(),
+                    memory_set,
+                    parent: Some(Arc::downgrade(self)),
+                    child: Vec::new(),
+                    exit_code: 0,
+                    heap_bottom: user_sp,
+                    program_brk: user_sp,
+                    fd_table: new_fd_table,
+                    stride: 0,
+                    prio: 16,
+                })
+            },
+        });
+        let trap_cx = task_control_block.inner_exclusive_access().get_trap_cx();
+        *trap_cx = TrapContext::app_init_context(
+            entry_point,
+            user_sp,
+            KERNEL_SPACE.exclusive_access().token(),
+            kernel_stack_top,
+            trap_handler as usize,
+        );
+        parent_inner.child.push(task_control_block.clone());
+        task_control_block
+    }
 }
 
 impl TaskControlBlockInner {
@@ -327,6 +406,17 @@ impl TaskControlBlockInner {
     /// 取消一块地址空间的映射
     pub fn unmapping_address_space(&mut self, start_va: VirtAddr, end_va: VirtAddr) {
         self.memory_set.munmap_area(start_va, end_va);
+    }
+
+    /// 分配一个fd
+    pub fn alloc_fd(&mut self) -> usize {
+        if let Some(fd) = (0..self.fd_table.len()).find(|fd| self.fd_table[*fd].is_none()) {
+            fd
+        } else {
+            // 如果前面都有 那么在尾部增加一个
+            self.fd_table.push(None);
+            self.fd_table.len() - 1
+        }
     }
 }
 

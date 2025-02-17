@@ -6,7 +6,8 @@ use riscv::register::satp;
 
 use crate::{
     config::{
-        KERNEL_STACK_SIZE, MEMORY_END, PAGE_SIZE, TRAMPOLINE, TRAP_CONTEXT_BASE, USER_STACK_SIZE,
+        KERNEL_STACK_SIZE, MEMORY_END, MMIO, PAGE_SIZE, TRAMPOLINE, TRAP_CONTEXT_BASE,
+        USER_STACK_SIZE,
     },
     mm::address::StepByOne,
     sync::UPSafeCell,
@@ -183,6 +184,19 @@ impl MemorySet {
             ),
             None,
         );
+
+        println!("[Kernel] mapping memory-mapped registers");
+        for pair in MMIO {
+            memory_set.push(
+                MapArea::new(
+                    (*pair).0.into(),
+                    ((*pair).0 + (*pair).1).into(),
+                    MapType::Identical,
+                    MapPermission::R | MapPermission::W,
+                ),
+                None,
+            );
+        }
 
         // return
         memory_set
@@ -577,6 +591,11 @@ lazy_static! {
     /// 全局地址空间 使用ARC的共享引用与UPSafeCell的互斥访问
     pub static ref KERNEL_SPACE: Arc<UPSafeCell<MemorySet>> =
         Arc::new(unsafe { UPSafeCell::new(MemorySet::new_kernel()) });
+}
+
+/// the Kernel token
+pub fn kernel_token() -> usize {
+    KERNEL_SPACE.exclusive_access().token()
 }
 
 /// return (bottom, top) of a kernel stack in kernel space

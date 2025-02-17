@@ -9,7 +9,7 @@ mod switch;
 #[allow(clippy::module_inception)]
 mod task;
 
-use crate::loader::get_app_data_by_name;
+use crate::fs::{open_file, OpenFlags};
 use alloc::sync::Arc;
 pub use context::TaskContext;
 use lazy_static::*;
@@ -25,9 +25,12 @@ pub use task::{exit_current_and_run_next, TaskControlBlock, TaskStatus};
 lazy_static! {
     /// initproc的初始PCB
     /// INITPROC进程在全局变量区
-    pub static ref INITPROC: Arc<TaskControlBlock> = Arc::new(TaskControlBlock::new(
-        get_app_data_by_name("ch5b_initproc").unwrap()
-    ));
+    pub static ref INITPROC: Arc<TaskControlBlock> = Arc::new({
+        let inode = open_file("ch6b_initproc", OpenFlags::RDONLY).unwrap();
+        let v = inode.read_all();
+        TaskControlBlock::new(v.as_slice())
+    }
+    );
 }
 
 /// 暂停当前进程 执行另外一个进程
